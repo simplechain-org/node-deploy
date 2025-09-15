@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-BSC Cluster Deployment Script
-Deploys BSC nodes to multiple servers using Docker
+BSC Cluster Deployment Script (Native Version)
+Deploys BSC nodes to multiple servers using native binaries instead of Docker
 """
 
 import os
@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class BSCClusterDeployer:
+class BSCNativeClusterDeployer:
     def __init__(self, config_path: str):
         self.config = self.load_config(config_path)
         self.distributor = FileDistributor(config_path)
@@ -165,79 +165,80 @@ class BSCClusterDeployer:
         """Create SSH client for server connection"""
         return self.distributor.create_ssh_client(server_config)
 
-    def build_docker_image(self) -> bool:
-        """Build Docker image locally"""
-        logger.info("Building Docker image...")
+    def build_geth_binary(self) -> bool:
+        """Build Geth binary locally"""
+        logger.info("Building Geth binary...")
 
         try:
-            # Check if Dockerfile exists
-            if not os.path.exists("Dockerfile"):
-                logger.error("Dockerfile not found in current directory")
-                return False
+            # Check if bsc directory exists
+            if not os.path.exists("bsc"):
+                logger.info("Cloning BSC repository...")
+                cmd = "git clone https://github.com/bnb-chain/bsc.git"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to clone BSC repository: {result.stderr}")
+                    return False
 
-            # Build Docker image
-            image_name = self.config['docker']['image_name']
-            image_tag = self.config['docker']['image_tag']
-
-            cmd = f"docker build -t {image_name}:{image_tag} ."
+            # Build geth binary
+            cmd = "cd bsc && make geth"
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
             if result.returncode != 0:
-                logger.error(f"Docker build failed: {result.stderr}")
+                logger.error(f"Geth build failed: {result.stderr}")
                 return False
 
-            logger.info(f"Docker image {image_name}:{image_tag} built successfully")
+            # Copy binary to bin directory
+            os.makedirs("bin", exist_ok=True)
+            cmd = "cp bsc/build/bin/geth bin/"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"Failed to copy geth binary: {result.stderr}")
+                return False
+
+            logger.info("Geth binary built successfully")
             return True
 
         except Exception as e:
-            logger.error(f"Error building Docker image: {e}")
+            logger.error(f"Error building Geth binary: {e}")
             return False
 
-    def push_docker_image(self) -> bool:
-        """Push Docker image to registry"""
-        registry = self.config['docker'].get('registry', '')
-        if not registry:
-            logger.info("No registry configured, skipping push")
-            return True
-
-        logger.info(f"Pushing Docker image to registry: {registry}")
-
+    def distribute_binaries(self) -> bool:
+        """Distribute node binaries to all servers"""
+        logger.info("Distributing node binaries to servers...")
+        
         try:
-            image_name = self.config['docker']['image_name']
-            image_tag = self.config['docker']['image_tag']
-
-            # Tag image for registry
-            registry_image = f"{registry}/{image_name}:{image_tag}"
-
-            # Tag the image
-            tag_cmd = f"docker tag {image_name}:{image_tag} {registry_image}"
-            result = subprocess.run(tag_cmd, shell=True, capture_output=True, text=True)
-            if result.returncode != 0:
-                logger.error(f"Docker tag failed: {result.stderr}")
+            # Check if distribute_binaries.py exists
+            current_dir = Path(__file__).resolve().parent
+            distrib_script = os.path.join(current_dir, "distribute_binaries.py")
+            
+            if not os.path.exists(distrib_script):
+                logger.error(f"Binary distribution script not found: {distrib_script}")
                 return False
-
-            # Push the image
-            push_cmd = f"docker push {registry_image}"
-            result = subprocess.run(push_cmd, shell=True, capture_output=True, text=True)
+            
+            # Run the binary distribution script
+            cmd = ["python3", distrib_script, "--config", "deployment-config.yaml"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
             if result.returncode != 0:
-                logger.error(f"Docker push failed: {result.stderr}")
+                logger.error(f"Binary distribution failed: {result.stderr}")
                 return False
-
-            logger.info(f"Docker image pushed to {registry_image}")
+                
+            logger.info("Node binaries distributed successfully")
             return True
-
+            
         except Exception as e:
-            logger.error(f"Error pushing Docker image: {e}")
+            logger.error(f"Error during binary distribution: {e}")
             return False
 
     def deploy_to_server(self, server_config: Dict[str, Any]) -> bool:
-        """Deploy SimpleChain2 node to a specific server"""
+        """Deploy BSC node to a specific server using native binary"""
         server_name = server_config['name']
-        role = server_config['role']  # Get role from server config
-        ports = server_config['ports']  # Get ports from server config
-        node_index = server_config['node_index']  # Get node index
+        role = server_config['role']
+        ports = server_config['ports']
+        node_index = server_config['node_index']
 
-        logger.info(f"Starting deployment to {server_name}")
+        logger.info(f"Starting native deployment to {server_name}")
         current_dir = Path(__file__).resolve().parent
 
         # Get validator address for validator nodes
@@ -257,11 +258,14 @@ class BSCClusterDeployer:
             self.distributor.ensure_remote_directory(ssh_client, f"{remote_base}/keys")
             self.distributor.ensure_remote_directory(ssh_client, f"{remote_base}/config")
 
-            # Generate Docker run command with correct validator address
-            docker_cmd = self.generate_docker_run_command(server_config, validator_address)
-            print(docker_cmd)
-            # Use per-node data directory for cleanup
-            data_dir = f"{remote_base}/data"
+            # Initialize the node with genesis file before starting
+            init_cmd = self.generate_init_command(server_config)
+            logger.info(f"Initialization command: {init_cmd}")
+
+            # Generate startup command
+            startup_cmd = self.generate_native_run_command(server_config, validator_address)
+            logger.info(f"Startup command: {startup_cmd}")
+
             # Create deployment script
             if role == 'validator':
                 deployment_script = f"""#!/bin/bash
@@ -269,30 +273,28 @@ set -e
 
 echo "Starting BSC validator node deployment on {server_name}"
 
-# Stop existing container if running
-docker stop {server_name} 2>/dev/null || true
-docker rm {server_name} 2>/dev/null || true
+# Kill existing process if running
+pkill -f "geth.*{server_name}" 2>/dev/null || true
 
-# Run Docker container
-{docker_cmd}
+# Clean up mounted data directory to prevent dirty data issues
+echo "Cleaning up data directory to prevent dirty data..."
+if [ -d "{remote_base}/data" ]; then
+    rm -rf {remote_base}/data/*
+    find {remote_base}/data -name ".*" -type f -delete 2>/dev/null || true
+fi
+
+# Initialize node with genesis file
+echo "Initializing node with genesis file..."
+{init_cmd}
+
+# Run Geth binary
+{startup_cmd}
 
 echo "BSC validator node deployment completed on {server_name}"
 
 # Wait for node to be ready for staking
 echo "Waiting for node to be ready for staking..."
 sleep 45
-
-# Register validator and stake tokens
-echo "Registering validator and staking tokens..."
-# Note: This requires the create-validator tool and proper configuration
-# The actual staking command should be added here based on your setup
-# Example command structure:
-# create-validator --consensus-key-dir ~/sipc2/{server_name}/keys/validator \\
-#                  --vote-key-dir ~/sipc2/{server_name}/keys/bls \\
-#                  --password-path ~/sipc2/{server_name}/keys/password.txt \\
-#                  --amount 20001 \\
-#                  --validator-desc {server_name} \\
-#                  -rpc-url http://localhost:{ports['http']}
 
 echo "Validator registration and staking completed"
 """
@@ -305,23 +307,26 @@ set -e
 
 echo "Starting BSC {role} node deployment on {server_name}"
 
-# Stop existing container if running
-docker stop {server_name} 2>/dev/null || true
-docker rm {server_name} 2>/dev/null || true
+# Kill existing process if running
+pkill -f "geth.*{server_name}" 2>/dev/null || true
 
 # Clean up mounted data directory to prevent dirty data issues
 if [ "{clean_data}" = "True" ]; then
     echo "Cleaning up data directory to prevent dirty data..."
-    if [ -d "{data_dir}" ]; then
-        rm -rf {data_dir}/*
-        find {data_dir} -name ".*" -type f -delete 2>/dev/null || true
+    if [ -d "{remote_base}/data" ]; then
+        rm -rf {remote_base}/data/*
+        find {remote_base}/data -name ".*" -type f -delete 2>/dev/null || true
     fi
 else
     echo "Skipping data directory cleanup (clean_before_deploy=False)"
 fi
 
-# Run Docker container
-{docker_cmd}
+# Initialize node with genesis file
+echo "Initializing node with genesis file..."
+{init_cmd}
+
+# Run Geth binary
+{startup_cmd}
 
 echo "BSC {role} node deployment completed on {server_name}"
 """
@@ -342,13 +347,6 @@ echo "BSC {role} node deployment completed on {server_name}"
                 ssh_client.close()
                 return False
 
-            # If this is a validator node, register and stake tokens
-            if role == 'validator':
-                if os.path.isdir(f"{current_dir}/sipc2/{server_name}/keys/validator"):
-                    logger.info(f"Validator node deployed, proceeding with staking registration for {server_name}")
-                    if not self.register_validator_stake(server_config, ssh_client, validator_address):
-                        logger.warning(f"Staking registration failed for {server_name}, but deployment was successful")
-
             logger.info(f"Deployment completed successfully on {server_name}")
             ssh_client.close()
             return True
@@ -357,113 +355,99 @@ echo "BSC {role} node deployment completed on {server_name}"
             logger.error(f"Deployment failed on {server_name}: {e}")
             return False
 
-    def generate_docker_run_command(self, server_config: Dict[str, Any], validator_address: str = None) -> str:
-        """Generate Docker run command for server"""
-        image_name = self.config['docker']['image_name']
-        image_tag = self.config['docker']['image_tag']
-        registry = self.config['docker'].get('registry', '')
+    def generate_init_command(self, server_config: Dict[str, Any]) -> str:
+        """Generate geth init command for server"""
+        server_name = server_config['name']
+        node_index = server_config['node_index']
+        role = server_config['role']
 
-        if registry:
-            full_image_name = f"{registry}/{image_name}:{image_tag}"
-        else:
-            full_image_name = f"{image_name}:{image_tag}"
+        # Generate paths
+        current_dir = Path(__file__).resolve().parent
+        remote_base = f"{current_dir}/sipc2/{server_name}"
 
+        # Build geth init command
+        init_cmd = [
+            f"{remote_base}/bin/geth",
+            f"--datadir {remote_base}/data",
+            "init",
+            "--state.scheme path",
+            "--db.engine pebble",
+            f"{remote_base}/config/genesis.json"
+        ]
+
+        # For first validator node, use different parameters
+        if role == 'validator' and node_index == 0:
+            init_cmd[3] = "--state.scheme hash"
+            init_cmd[4] = "--db.engine leveldb"
+
+        # For second validator node, use multidatabase
+        if role == 'validator' and node_index == 1:
+            init_cmd.insert(5, "--multidatabase")
+
+        return " ".join(init_cmd)
+
+    def generate_native_run_command(self, server_config: Dict[str, Any], validator_address: str = None) -> str:
+        """Generate native geth run command for server"""
         container_name = server_config['name']
         node_index = server_config['node_index']
         role = server_config['role']
 
-        # Set environment variables
-        env_vars = [
-            f"-e NODE_TYPE={role}",
-        ]
-
         # Generate port mappings
         ports = server_config['ports']
-        port_mappings = [
-            f"-p {ports['http']}:8545",            # HTTP port (TCP)
-            f"-p {ports['ws']}:8546",              # WebSocket port (TCP)
-            f"-p {ports['p2p']}:30303",            # P2P TCP
-            f"-p {ports['p2p']}:30303/udp",        # P2P UDP for discovery
-            f"-p {ports['metrics']}:6060"          # Metrics/PProf port (TCP)
-        ]
-
-        # Generate volume mappings (match docker-entrypoint.sh paths)
+        
+        # Generate paths (match docker-entrypoint.sh paths)
         current_dir = Path(__file__).resolve().parent
         remote_base = f"{current_dir}/sipc2/{container_name}"
 
-        # Basic volume mappings
-        volume_mappings = [
-            f"-v {remote_base}/keys:/home/sipc2/keys",
-            f"-v {remote_base}/config/genesis.json:/home/sipc2/config/genesis.json",
-            f"-v {remote_base}/config/config.toml:/home/sipc2/config/config.toml",
-            f"-v {remote_base}/data:/data",
-            # f"-v {remote_base}/keys/password.txt:/home/sipc2/password.txt"
-        ]
-
-        # Add keystore and bls mappings for validators
-        if role == 'validator':
-            # Add nodekey mapping
-            nodekey_path = f"{remote_base}/keys/validator-nodekey"
-            volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
-
-        elif role == 'sentry':
-            # Add nodekey mapping for sentry
-            nodekey_path = f"{remote_base}/keys/sentry-nodekey"
-            volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
-
-        elif role == 'fullnode':
-            # Add nodekey mapping for fullnode
-            nodekey_path = f"{remote_base}/keys/fullnode-nodekey"
-            volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
-
-        # Build Docker run command with native_start parameters
+        # Build native geth run command with proper port mappings
         if role == 'validator':
             # Use provided validator address or default
             if validator_address is None:
                 validator_address = "0x0000000000000000000000000000000000000000"
 
-            # Validator node startup command based on native_start
-            docker_cmd = [
-                "docker run -d",
-                f"--name {container_name}",
-                "--restart unless-stopped",
-                " ".join(port_mappings),
-                " ".join(volume_mappings),
-                full_image_name,
-                f"--mine --vote --password /home/sipc2/keys/password.txt --unlock {validator_address}",
-                f"--miner.etherbase {validator_address} --blspassword /home/sipc2/keys/password.txt",
-                "--nodekey /home/sipc2/keys/nodekey",
-                "--blswallet /home/sipc2/keys/bls/wallet",
-                "--keystore /home/sipc2/keys/consensus/keystore",
+            # Validator node startup command with proper port mappings
+            geth_cmd = [
+                f"{remote_base}/bin/geth",
+                f"--config {remote_base}/config/config.toml",
+                "--mine --vote",
+                f"--password {remote_base}/keys/password.txt",
+                f"--unlock {validator_address}",
+                f"--miner.etherbase {validator_address}",
+                f"--blspassword {remote_base}/keys/password.txt",
+                f"--nodekey {remote_base}/keys/validator-nodekey",
+                f"--blswallet {remote_base}/keys/bls/wallet",
+                f"--keystore {remote_base}/keys/consensus/keystore",
                 "--rpc.allow-unprotected-txs --allow-insecure-unlock",
-                "--ws.addr 0.0.0.0 --ws.port 8546 --http.addr 0.0.0.0 --http.port 8545 --http.corsdomain '*'",
-                "--metrics --metrics.addr localhost --metrics.port 6060 --metrics.expensive",
+                f"--ws.addr 0.0.0.0 --ws.port {ports['ws']}",
+                f"--http.addr 0.0.0.0 --http.port {ports['http']} --http.corsdomain '*'",
+                f"--metrics --metrics.addr localhost --metrics.port {ports['metrics']} --metrics.expensive",
+                f"--port {ports['p2p']}",  # 添加P2P端口配置
                 "--pprof --pprof.addr localhost --pprof.port 6060",
                 "--gcmode full --syncmode full --monitor.maliciousvote",
                 "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
-                "--override.immutabilitythreshold 2048 --override.breatheblockinterval 600",
-                "--override.minforblobrequest 576 --override.defaultextrareserve 32"
+                "--override.immutabilitythreshold 100 --override.breatheblockinterval 600",
+                "--override.minforblobrequest 20 --override.defaultextrareserve 10",
+                f"--datadir {remote_base}/data"
             ]
         else:
-            # Sentry/Full node startup command
-            docker_cmd = [
-                "docker run -d",
-                f"--name {container_name}",
-                "--restart unless-stopped",
-                " ".join(port_mappings),
-                " ".join(volume_mappings),
-                full_image_name,
+            # Sentry/Full node startup command with proper port mappings
+            geth_cmd = [
+                f"{remote_base}/bin/geth",
+                f"--config {remote_base}/config/config.toml",
                 "--rpc.allow-unprotected-txs --allow-insecure-unlock",
-                "--ws.addr 0.0.0.0 --ws.port 8546 --http.addr 0.0.0.0 --http.port 8545 --http.corsdomain '*'",
-                "--metrics --metrics.addr localhost --metrics.port 6060 --metrics.expensive",
+                f"--ws.addr 0.0.0.0 --ws.port {ports['ws']}",
+                f"--http.addr 0.0.0.0 --http.port {ports['http']} --http.corsdomain '*'",
+                f"--metrics --metrics.addr localhost --metrics.port {ports['metrics']} --metrics.expensive",
+                f"--port {ports['p2p']}",  # 添加P2P端口配置
                 "--pprof --pprof.addr localhost --pprof.port 6060",
                 "--gcmode full --syncmode full",
                 "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
-                "--override.immutabilitythreshold 2048 --override.breatheblockinterval 600",
-                "--override.minforblobrequest 576 --override.defaultextrareserve 32"
+                "--override.immutabilitythreshold 100 --override.breatheblockinterval 600",
+                "--override.minforblobrequest 20 --override.defaultextrareserve 10",
+                f"--datadir {remote_base}/data"
             ]
 
-        return " ".join(docker_cmd)
+        return " ".join(geth_cmd) + " &"
 
     def get_validator_address(self, node_index: int) -> str:
         """Get validator address from keystore file"""
@@ -558,22 +542,22 @@ echo "BSC {role} node deployment completed on {server_name}"
                 # Call bsc_cluster.sh to regenerate genesis
                 import subprocess
                 script_path = "./bsc_cluster.sh"
-            if not os.path.exists(script_path):
-                print(f"ERROR: Script not found at {script_path}")
-            else:
-                result = subprocess.run(["bash", script_path, "regen-genesis"], 
-                                    capture_output=True, 
-                                    text=True, 
-                                    cwd=".")
-                
-                print("Return code:", result.returncode)
-                print("STDOUT:", result.stdout)
-                if result.stderr:
-                    print("STDERR:", result.stderr)
-                if result.returncode != 0:
-                    logger.error(f"Failed to regenerate genesis: {result.stderr}")
-                    return False
-                logger.info("Genesis and config regeneration completed successfully")
+                if not os.path.exists(script_path):
+                    print(f"ERROR: Script not found at {script_path}")
+                else:
+                    result = subprocess.run(["bash", script_path, "regen-genesis"], 
+                                        capture_output=True, 
+                                        text=True, 
+                                        cwd=".")
+                    
+                    print("Return code:", result.returncode)
+                    print("STDOUT:", result.stdout)
+                    if result.stderr:
+                        print("STDERR:", result.stderr)
+                    if result.returncode != 0:
+                        logger.error(f"Failed to regenerate genesis: {result.stderr}")
+                        return False
+                    logger.info("Genesis and config regeneration completed successfully")
 
             if regenerate_configs:
                 logger.info("Server-specific config regeneration will be handled during file distribution")
@@ -582,71 +566,6 @@ echo "BSC {role} node deployment completed on {server_name}"
 
         except Exception as e:
             logger.error(f"Error during regeneration: {e}")
-            return False
-
-    def register_validator_stake(self, server_config: Dict[str, Any], ssh_client: paramiko.SSHClient, validator_address: str = None) -> bool:
-        """Register validator and stake tokens after deployment"""
-        server_name = server_config['name']
-        node_index = server_config['node_index']
-        ports = server_config['ports']
-
-        # Get validator address if not provided
-        if validator_address is None:
-            validator_address = self.get_validator_address(node_index)
-
-        logger.info(f"Registering validator {validator_address} and staking tokens for {server_name}")
-        current_dir = Path(__file__).resolve().parent
-        try:
-            # Wait for node to be ready
-            time.sleep(45)
-
-            # Create staking command using native create-validator binary
-            staking_command = f"""
-# Execute validator registration using native binary
-echo "Executing validator registration using native create-validator..."
-echo "Validator address: {validator_address}"
-
-{current_dir}/sipc2/{server_name}/create-validator \\
-    --operator-key-dir {current_dir}/sipc2/{server_name}/keys/validator \\
-    --consensus-key-dir {current_dir}/sipc2/{server_name}/keys/consensus \\
-    --vote-key-dir {current_dir}/sipc2/{server_name}/keys \\
-    --password-path {current_dir}/sipc2/{server_name}/keys/password.txt \\
-    --amount 20001 \\
-    --validator-desc Val{node_index} \\
-    --rpc-url http://localhost:{ports['http']}
-
-if [ $? -eq 0 ]; then
-    echo "Validator registration completed successfully for {validator_address}"
-else
-    echo "Validator registration failed for {validator_address}, but node deployment was successful"
-    echo "You may need to manually register the validator later"
-    exit 1
-fi
-"""
-
-            # Upload and execute staking script
-            remote_script_path = f"{current_dir}/sipc2/{server_name}/register_stake.sh"
-            with ssh_client.open_sftp() as sftp:
-                with sftp.file(remote_script_path, 'w') as f:
-                    f.write(staking_command)
-
-            # Make script executable and run it
-            stdin, stdout, stderr = ssh_client.exec_command(f"chmod +x {remote_script_path} && {remote_script_path}")
-            print(stdout.read().decode())
-            print(stderr.read().decode())
-            exit_code = stdout.channel.recv_exit_status()
-
-            if exit_code != 0:
-                error = stderr.read().decode()
-                logger.warning(f"Staking registration failed on {server_name}: {error}")
-                logger.warning("This might be expected if create-validator tool is not available")
-                return False
-
-            logger.info(f"Staking registration completed successfully on {server_name}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error during staking registration on {server_name}: {e}")
             return False
 
     def monitor_deployment(self) -> Dict[str, Any]:
@@ -666,27 +585,23 @@ fi
         """Check status of BSC node on server"""
         try:
             ssh_client = self.create_ssh_client(server_config)
-            container_name = server_config['name']
+            server_name = server_config['name']
 
-            # Check if container is running
-            stdin, stdout, stderr = ssh_client.exec_command(f"docker ps --filter name={container_name} --format '{{{{.Status}}}}'")
-            status_output = stdout.read().decode().strip()
+            # Check if process is running
+            stdin, stdout, stderr = ssh_client.exec_command(f"pgrep -f 'geth.*{server_name}'")
+            pid_output = stdout.read().decode().strip()
 
-            if status_output:
-                # Check container health
-                stdin, stdout, stderr = ssh_client.exec_command(f"docker inspect {container_name} --format '{{{{.State.Health.Status}}}}'")
-                health_output = stdout.read().decode().strip()
-
+            if pid_output:
                 return {
                     "status": "running",
-                    "health": health_output if health_output else "unknown",
-                    "details": status_output
+                    "health": "unknown",
+                    "details": f"Process running with PID(s): {pid_output}"
                 }
             else:
                 return {
                     "status": "stopped",
                     "health": "n/a",
-                    "details": "Container not running"
+                    "details": "Process not running"
                 }
 
         except Exception as e:
@@ -697,21 +612,24 @@ fi
             }
 
     def deploy_cluster(self) -> bool:
-        """Deploy BSC cluster to all servers"""
-        logger.info("Starting BSC cluster deployment")
+        """Deploy BSC cluster to all servers using native binaries"""
+        logger.info("Starting BSC cluster deployment (native)")
 
-        # Build Docker image
+        # Build Geth binary
         if not self.config['options'].get('skip_build', False):
-            if not self.build_docker_image():
-                return False
-
-            if not self.push_docker_image():
+            if not self.build_geth_binary():
                 return False
 
         # Regenerate genesis and configs if needed
         if not self.regenerate_genesis_and_configs():
             logger.error("Failed to regenerate genesis and configs")
             return False
+
+        # Distribute binaries to all servers
+        if not self.config['options'].get('skip_binary_distribution', False):
+            if not self.distribute_binaries():
+                logger.error("Failed to distribute node binaries")
+                return False
 
         # Distribute files
         if not self.config['options'].get('skip_distribution', False):
@@ -755,12 +673,13 @@ fi
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BSC Cluster Deployer")
+    parser = argparse.ArgumentParser(description="BSC Cluster Deployer (Native Version)")
     parser.add_argument("--config", default="deployment-config.yaml", help="Path to deployment config file")
     parser.add_argument("--action", choices=['deploy', 'monitor', 'files', 'add-node'], default='deploy', help="Action to perform")
     parser.add_argument("--server-name", help="Server name (from deployment-config.yaml) for add-node action")
     parser.add_argument("--no-update-peers-config", action="store_true", help="When adding node, do not refresh configs for all peers")
-    parser.add_argument("--skip-build", action="store_true", help="Skip Docker image build")
+    parser.add_argument("--skip-build", action="store_true", help="Skip Geth binary build")
+    parser.add_argument("--skip-binary-distribution", action="store_true", help="Skip node binary distribution")
     parser.add_argument("--skip-distribution", action="store_true", help="Skip file distribution")
     parser.add_argument("--regenerate-genesis", action="store_true", help="Force regenerate genesis.json")
     parser.add_argument("--no-regenerate-genesis", action="store_true", help="Skip genesis.json regeneration")
@@ -775,11 +694,13 @@ def main():
         return 1
 
     try:
-        deployer = BSCClusterDeployer(args.config)
+        deployer = BSCNativeClusterDeployer(args.config)
 
         # Override config options with command line args
         if args.skip_build:
             deployer.config['options']['skip_build'] = True
+        if args.skip_binary_distribution:
+            deployer.config['options']['skip_binary_distribution'] = True
         if args.skip_distribution:
             deployer.config['options']['skip_distribution'] = True
 
