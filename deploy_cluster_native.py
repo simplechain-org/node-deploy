@@ -100,11 +100,14 @@ class BSCNativeClusterDeployer:
                 nodekey_filename = f"sentry-nodekey{node_index}"
             elif role == 'fullnode':
                 nodekey_filename = f"fullnode-nodekey{node_index}"
+            elif role == 'archive':
+                nodekey_filename = f"archive-nodekey{node_index}"
             else:
-                logger.warning(f"Unknown role {role}; skipping nodekey generation")
+                logger.warning(f"Unknown role {role} for server {server_config['name']}, using default nodekey name")
+                nodekey_filename = f"nodekey{node_index}"
 
-            if nodekey_filename:
-                self._generate_nodekey(os.path.join(keys_base, nodekey_filename))
+            nodekey_path = os.path.join(keys_base, nodekey_filename)
+            self._generate_nodekey(nodekey_path)
 
             if role == 'validator':
                 # Operator and consensus keystores
@@ -424,6 +427,23 @@ echo "BSC {role} node deployment completed on {server_name}"
                 f"--port {ports['p2p']}",  # 添加P2P端口配置
                 "--pprof --pprof.addr localhost --pprof.port 6060",
                 "--gcmode full --syncmode full --monitor.maliciousvote",
+                "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
+                "--override.immutabilitythreshold 100 --override.breatheblockinterval 600",
+                "--override.minforblobrequest 20 --override.defaultextrareserve 10",
+                f"--datadir {remote_base}/data"
+            ]
+        elif role == 'archive':
+            # Archive node startup command (same as fullnode but with gcmode=archive)
+            geth_cmd = [
+                f"{remote_base}/bin/geth",
+                f"--config {remote_base}/config/config.toml",
+                "--rpc.allow-unprotected-txs --allow-insecure-unlock",
+                f"--ws.addr 0.0.0.0 --ws.port {ports['ws']}",
+                f"--http.addr 0.0.0.0 --http.port {ports['http']} --http.corsdomain '*'",
+                f"--metrics --metrics.addr localhost --metrics.port {ports['metrics']} --metrics.expensive",
+                f"--port {ports['p2p']}",  # 添加P2P端口配置
+                "--pprof --pprof.addr localhost --pprof.port 6060",
+                "--gcmode archive --syncmode full",
                 "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
                 "--override.immutabilitythreshold 100 --override.breatheblockinterval 600",
                 "--override.minforblobrequest 20 --override.defaultextrareserve 10",

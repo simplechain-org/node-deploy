@@ -539,7 +539,14 @@ class FileDistributor:
                         self.upload_file(None, node_key_file, os.path.join(remote_base, "keys", f"{role}-nodekey"), server_host)
                     else:
                         self.upload_file(ssh_client, node_key_file, f"{remote_base}/keys/{role}-nodekey", server_host)
-
+            elif role == 'archive':
+                # Upload node key for archive node
+                node_key_file = os.path.join(current_dir, f"{self.config['files']['keys_base']}/archive-nodekey{node_index}")
+                if os.path.exists(node_key_file):
+                    if is_local:
+                        self.upload_file(None, node_key_file, os.path.join(remote_base, "keys", "archive-nodekey"), server_host)
+                    else:
+                        self.upload_file(ssh_client, node_key_file, f"{remote_base}/keys/archive-nodekey", server_host)
             # Upload password file for all node types
             password_file = os.path.join(current_dir, f"{self.config['files']['keys_base']}/password.txt")
             if os.path.exists(password_file):
@@ -570,6 +577,8 @@ class FileDistributor:
             filename = f"sentry-nodekey{node_index}"
         elif role == 'fullnode':
             filename = f"fullnode-nodekey{node_index}"
+        elif role == 'archive':
+            filename = f"archive-nodekey{node_index}"
         else:
             return None
 

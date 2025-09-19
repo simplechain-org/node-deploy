@@ -49,7 +49,7 @@ function create_validator() {
 
     for ((i = 0; i < size; i++)); do
         # Handle validator based on whether it's a file or directory
-        handle_validator "${workspace}/keys/validator${i}" ${i} "${workspace}/.local/validator${i}"
+        handle_validator "${workspace}/keys/validator${i}" ${i} "${workspace}/.local/"
         cp -r ${workspace}/keys/consensus${i} ${workspace}/.local/
         cp -r ${workspace}/keys/bls${i} ${workspace}/.local/
     done
@@ -109,8 +109,9 @@ function prepare_config() {
             echo "Error: Validator ${i} is neither a file nor a directory"
             exit 1
         fi
-        
-        initHolders=${initHolders}","${operator_addr}
+
+
+#         initHolders=${initHolders}","${operator_addr}
         fee_addr=${operator_addr}
 
         for f in ${workspace}/.local/consensus${i}/keystore/*; do
@@ -144,7 +145,7 @@ function prepare_config() {
     poetry run python -m scripts.generate generate-init-holders "${initHolders}"
     poetry run python -m scripts.generate dev \
       --dev-chain-id "${CHAIN_ID}" \
-      --init-burn-ratio "1000" \
+      --init-burn-ratio "500" \
       --init-felony-slash-scope "60" \
       --breathe-block-interval "10 minutes" \
       --block-interval "3 seconds" \

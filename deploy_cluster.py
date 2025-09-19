@@ -100,6 +100,8 @@ class BSCClusterDeployer:
                 nodekey_filename = f"sentry-nodekey{node_index}"
             elif role == 'fullnode':
                 nodekey_filename = f"fullnode-nodekey{node_index}"
+            elif role == 'archive':
+                nodekey_filename = f"archive-nodekey{node_index}"
             else:
                 logger.warning(f"Unknown role {role}; skipping nodekey generation")
 
@@ -415,6 +417,14 @@ echo "BSC {role} node deployment completed on {server_name}"
             # Add nodekey mapping for fullnode
             nodekey_path = f"{remote_base}/keys/fullnode-nodekey"
             volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
+        elif role == 'archive':
+            # Add nodekey mapping for archive node
+            nodekey_path = f"{remote_base}/keys/archive-nodekey"
+            volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
+        elif role == 'archive':
+            # Add nodekey mapping for archive node
+            nodekey_path = f"{remote_base}/keys/archive-nodekey"
+            volume_mappings.append(f"-v {nodekey_path}:/home/sipc2/keys/nodekey")
 
         # Build Docker run command with native_start parameters
         if role == 'validator':
@@ -440,6 +450,24 @@ echo "BSC {role} node deployment completed on {server_name}"
                 "--metrics --metrics.addr localhost --metrics.port 6060 --metrics.expensive",
                 "--pprof --pprof.addr localhost --pprof.port 6060",
                 "--gcmode full --syncmode full --monitor.maliciousvote",
+                "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
+                "--override.immutabilitythreshold 2048 --override.breatheblockinterval 600",
+                "--override.minforblobrequest 576 --override.defaultextrareserve 32"
+            ]
+        elif role == 'archive':
+            # Archive node startup command (same as fullnode but with gcmode=archive)
+            docker_cmd = [
+                "docker run -d",
+                f"--name {container_name}",
+                "--restart unless-stopped",
+                " ".join(port_mappings),
+                " ".join(volume_mappings),
+                full_image_name,
+                "--rpc.allow-unprotected-txs --allow-insecure-unlock",
+                "--ws.addr 0.0.0.0 --ws.port 8546 --http.addr 0.0.0.0 --http.port 8545 --http.corsdomain '*'",
+                "--metrics --metrics.addr localhost --metrics.port 6060 --metrics.expensive",
+                "--pprof --pprof.addr localhost --pprof.port 6060",
+                "--gcmode archive --syncmode full",
                 "--override.passedforktime 1725500000 --override.lorentz 1725500000 --override.maxwell 1725500000",
                 "--override.immutabilitythreshold 2048 --override.breatheblockinterval 600",
                 "--override.minforblobrequest 576 --override.defaultextrareserve 32"
@@ -518,39 +546,39 @@ echo "BSC {role} node deployment completed on {server_name}"
             return True
 
         try:
-            # Check if BSC_CLUSTER_SIZE in .env matches cluster.size in deployment config
-            cluster_size = self.config['cluster']['size']
-            env_file_path = ".env"
-            
-            if os.path.exists(env_file_path):
-                # Read .env file
-                with open(env_file_path, 'r') as f:
-                    env_content = f.read()
-                
-                # Extract BSC_CLUSTER_SIZE from .env
-                import re
-                match = re.search(r'BSC_CLUSTER_SIZE=(\d+)', env_content)
-                if match:
-                    env_cluster_size = int(match.group(1))
-                    
-                    # If they don't match, update .env file
-                    if env_cluster_size != cluster_size:
-                        logger.info(f"Updating BSC_CLUSTER_SIZE in .env from {env_cluster_size} to {cluster_size}")
-                        # Replace the BSC_CLUSTER_SIZE line
-                        env_content = re.sub(
-                            r'BSC_CLUSTER_SIZE=\d+', 
-                            f'BSC_CLUSTER_SIZE={cluster_size}', 
-                            env_content
-                        )
-                        
-                        # Write back to .env file
-                        with open(env_file_path, 'w') as f:
-                            f.write(env_content)
-                        logger.info(".env file updated successfully")
-                else:
-                    logger.warning("BSC_CLUSTER_SIZE not found in .env file")
-            else:
-                logger.warning(".env file not found")
+#             # Check if BSC_CLUSTER_SIZE in .env matches cluster.size in deployment config
+#             cluster_size = self.config['cluster']['size']
+#             env_file_path = ".env"
+#
+#             if os.path.exists(env_file_path):
+#                 # Read .env file
+#                 with open(env_file_path, 'r') as f:
+#                     env_content = f.read()
+#
+#                 # Extract BSC_CLUSTER_SIZE from .env
+#                 import re
+#                 match = re.search(r'BSC_CLUSTER_SIZE=(\d+)', env_content)
+#                 if match:
+#                     env_cluster_size = int(match.group(1))
+#
+#                     # If they don't match, update .env file
+#                     if env_cluster_size != cluster_size:
+#                         logger.info(f"Updating BSC_CLUSTER_SIZE in .env from {env_cluster_size} to {cluster_size}")
+#                         # Replace the BSC_CLUSTER_SIZE line
+#                         env_content = re.sub(
+#                             r'BSC_CLUSTER_SIZE=\d+',
+#                             f'BSC_CLUSTER_SIZE={cluster_size}',
+#                             env_content
+#                         )
+#
+#                         # Write back to .env file
+#                         with open(env_file_path, 'w') as f:
+#                             f.write(env_content)
+#                         logger.info(".env file updated successfully")
+#                 else:
+#                     logger.warning("BSC_CLUSTER_SIZE not found in .env file")
+#             else:
+#                 logger.warning(".env file not found")
 
             if regenerate_genesis:
                 logger.info("Regenerating genesis.json and base config...")
