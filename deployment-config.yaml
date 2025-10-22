@@ -1,0 +1,193 @@
+# BSC Cluster Deployment Configuration
+deployment:
+  name: "simple-chain"
+  version: "1.0.0"
+  chain_id: 1914
+
+# Cluster configuration
+cluster:
+  size: 13
+  enable_sentry_nodes: false
+  enable_full_nodes: false
+
+# Docker configuration
+docker:
+  image_name: "simplechain-org/simplechain-v2"
+  image_tag: "latest"
+  registry: "ghcr.io"  # Use GitHub Container Registry
+
+# Server cluster configuration
+servers:
+  - name: "validator-1"
+    host: "192.168.3.205"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 0
+    ports:
+      http: 8545
+      ws: 8546
+      p2p: 30303
+      metrics: 6060
+  - name: "validator-2"
+    host: "192.168.3.205"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 1
+    ports:
+     http: 8555
+     ws: 8556
+     p2p: 30313
+     metrics: 6160
+  - name: "validator-3"
+    host: "192.168.3.205"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 2
+    ports:
+     http: 8565
+     ws: 8566
+     p2p: 30323
+     metrics: 6260
+  - name: "validator-4"
+    host: "192.168.3.209"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 3
+    ports:
+     http: 8545
+     ws: 8546
+     p2p: 30303
+     metrics: 6060
+  - name: "validator-5"
+    host: "192.168.3.209"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 4
+    ports:
+     http: 8555
+     ws: 8556
+     p2p: 30313
+     metrics: 6160
+  - name: "validator-6"
+    host: "192.168.3.209"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 5
+    ports:
+     http: 8575
+     ws: 8576
+     p2p: 30323
+     metrics: 6260
+  - name: "validator-7"
+    host: "192.168.3.65"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 6
+    ports:
+      http: 8545
+      ws: 8546
+      p2p: 30303
+      metrics: 6060
+  - name: "validator-8"
+    host: "192.168.3.65"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 7
+    ports:
+      http: 8555
+      ws: 8556
+      p2p: 30313
+      metrics: 6160
+  - name: "validator-9"
+    host: "192.168.3.128"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 8
+    ports:
+      http: 8545
+      ws: 8546
+      p2p: 30303
+      metrics: 6060
+  - name: "validator-10"
+    host: "192.168.3.128"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 9
+    ports:
+      http: 8555
+      ws: 8556
+      p2p: 30313
+      metrics: 6160
+  - name: "validator-11"
+    host: "192.168.3.128"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 10
+    ports:
+      http: 8565
+      ws: 8566
+      p2p: 30323
+      metrics: 6260
+  - name: "validator-12"
+    host: "192.168.3.159"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 11
+    ports:
+      http: 8545
+      ws: 8546
+      p2p: 30303
+      metrics: 6060
+  - name: "validator-13"
+    host: "192.168.3.159"
+    user: "ubuntu"
+    ssh_key: "~/.ssh/id_rsa"
+    role: "validator"
+    node_index: 12
+    ports:
+      http: 8555
+      ws: 8556
+      p2p: 30313
+      metrics: 6160
+
+# File distribution configuration
+files:
+  genesis: "genesis/genesis.json"
+  config: "config.toml"
+  keys_base: "keys"
+  deployment_base: "deployment"
+
+# Deployment options
+options:
+  skip_build: true    # Skip Docker build since we use pre-built image from ghcr.io
+  skip_distribution: false  # Still need to distribute config and keys
+  regenerate_genesis: true   # Regenerate genesis.json before deployment
+  regenerate_configs: true   # Regenerate config.toml for each server
+  clean_before_deploy: true
+  parallel_deployment: true
+  max_parallel: 5
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  prometheus_port: 9090
+  grafana_port: 3000
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  rotate_size: "10M"
+  max_backups: 5
