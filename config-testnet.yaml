@@ -1,0 +1,73 @@
+# BSC Genesis Configuration - Testnet
+# Testnet configuration template
+
+# Chain basic configuration
+chain:
+  chain_id: 1914
+  block_interval: "3 seconds"
+  breathe_block_interval: "10 minutes"
+
+# Initial holders configuration
+init_holders:
+  # Primary holder address
+  primary_holder: "0x04d63aBCd2b9b1baa327f2Dda0f873F197ccd186"
+  # Whether to allocate initial tokens to validators
+  enable_for_validators: false
+
+# Slash penalty configuration
+slash:
+  # Initial burn ratio (500 = 5%)
+  init_burn_ratio: 500
+  # Felony slash scope (number of blocks)
+  init_felony_slash_scope: 60
+  # Misdemeanor threshold
+  misdemeanor_threshold: 50
+  # Felony threshold
+  felony_threshold: 150
+
+# Jail configuration
+jail:
+  # Downtime jail time
+  downtime_jail_time: "2 minutes"
+  # Felony jail time
+  felony_jail_time: "3 minutes"
+
+# Staking configuration
+staking:
+  # StakeHub protector address
+  stake_hub_protector: "0x04d63aBCd2b9b1baa327f2Dda0f873F197ccd186"
+  # Unbond period
+  unbond_period: "2 minutes"
+
+# Governance configuration
+governance:
+  # Voting delay period
+  init_voting_delay: "1 minutes / BLOCK_INTERVAL"
+  # Voting period
+  init_voting_period: "2 minutes / BLOCK_INTERVAL"
+  # Minimum period after quorum is reached
+  init_min_period_after_quorum: "uint64(1 minutes / BLOCK_INTERVAL)"
+  # Governor protector address
+  governor_protector: "0x04d63aBCd2b9b1baa327f2Dda0f873F197ccd186"
+  # Minimal delay time
+  init_minimal_delay: "1 minutes"
+
+# Token recovery portal configuration
+token_recovery:
+  # Token recovery portal protector address
+  protector: "0x04d63aBCd2b9b1baa327f2Dda0f873F197ccd186"
+
+# Validators configuration
+validators:
+  # Validator set size
+  cluster_size: 21
+  # Whether to enable sentry nodes
+  enable_sentry_node: false
+  # Whether to enable full nodes
+  enable_full_node: false
+
+# Node runtime configuration (these parameters will be read by node startup scripts)
+runtime:
+  # Breathe block interval (seconds) - converted from "10 minutes" to 600 seconds
+  breathe_block_interval_seconds: 600
+

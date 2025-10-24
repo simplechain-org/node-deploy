@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  genesis:
+    image: genesis-builder:local
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    volumes:
+      - genesis-data:/workspace/genesis-out
+    environment:
+      - PASSED_FORK_DELAY=60
+    networks:
+      - spc-network
+
+  spc-validator-1:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    hostname: validator-1
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == validator-1
+      restart_policy:
+        condition: on-failure
+    user: root
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "cp /entrypoint/docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh && exec /usr/local/bin/docker-entrypoint.sh"]
+    environment:
+      - NODE_TYPE=validator
+      - CONSENSUS_ADDRESS=${VALIDATOR_ADDRESS_1:-}
+      - VALIDATOR_INDEX=0
+    configs:
+      - source: docker-entrypoint
+        target: /entrypoint/docker-entrypoint.sh
+      - source: node-config
+        target: /home/sipc2/config/config.toml
+    secrets:
+      - source: password
+        target: /home/sipc2/keys/password.txt
+      - source: validator0-nodekey
+        target: /home/sipc2/keys/nodekey
+    volumes:
+      - genesis-data:/genesis-out:ro
+      - validator1-data:/data
+      - type: bind
+        source: ./keys/consensus0/keystore
+        target: /home/sipc2/keys/consensus/keystore
+        read_only: true
+      - type: bind
+        source: ./keys/bls0
+        target: /home/sipc2/keys/bls
+        read_only: true
+    ports:
+      - target: 8545
+        published: 8645
+        protocol: tcp
+        mode: host
+      - target: 8546
+        published: 8646
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 31303
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 31303
+        protocol: udp
+        mode: host
+    networks:
+      - spc-network
+
+  spc-validator-2:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    hostname: validator-2
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == validator-2
+      restart_policy:
+        condition: on-failure
+    user: root
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "cp /entrypoint/docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh && exec /usr/local/bin/docker-entrypoint.sh"]
+    environment:
+      - NODE_TYPE=validator
+      - CONSENSUS_ADDRESS=${VALIDATOR_ADDRESS_2:-}
+      - VALIDATOR_INDEX=1
+    configs:
+      - source: docker-entrypoint
+        target: /entrypoint/docker-entrypoint.sh
+      - source: node-config
+        target: /home/sipc2/config/config.toml
+    secrets:
+      - source: password
+        target: /home/sipc2/keys/password.txt
+      - source: validator1-nodekey
+        target: /home/sipc2/keys/nodekey
+    volumes:
+      - genesis-data:/genesis-out:ro
+      - validator2-data:/data
+      - type: bind
+        source: ./keys/consensus1/keystore
+        target: /home/sipc2/keys/consensus/keystore
+        read_only: true
+      - type: bind
+        source: ./keys/bls1
+        target: /home/sipc2/keys/bls
+        read_only: true
+    ports:
+      - target: 8545
+        published: 8745
+        protocol: tcp
+        mode: host
+      - target: 8546
+        published: 8746
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 32303
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 32303
+        protocol: udp
+        mode: host
+    networks:
+      - spc-network
+
+networks:
+    spc-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  genesis-data:
+  validator1-data:
+  validator2-data:
+
+configs:
+  docker-entrypoint:
+    file: ./docker-entrypoint.sh
+  node-config:
+    file: ./config.toml
+
+secrets:
+  password:
+    file: ./keys/password.txt
+  validator0-nodekey:
+    file: ./keys/validator-nodekey0
+  validator1-nodekey:
+    file: ./keys/validator-nodekey1
+

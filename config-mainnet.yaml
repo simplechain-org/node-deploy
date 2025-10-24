@@ -1,0 +1,73 @@
+# BSC Genesis Configuration - Mainnet
+# Mainnet configuration template
+
+# Chain basic configuration
+chain:
+  chain_id: 56
+  block_interval: "3 seconds"
+  breathe_block_interval: "1 day"
+
+# Initial holders configuration
+init_holders:
+  # Primary holder address (need to be changed to actual address)
+  primary_holder: "0x0000000000000000000000000000000000000000"
+  # Whether to allocate initial tokens to validators
+  enable_for_validators: false
+
+# Slash penalty configuration
+slash:
+  # Initial burn ratio (1000 = 10%)
+  init_burn_ratio: 1000
+  # Felony slash scope (number of blocks)
+  init_felony_slash_scope: 256
+  # Misdemeanor threshold
+  misdemeanor_threshold: 50
+  # Felony threshold
+  felony_threshold: 150
+
+# Jail configuration
+jail:
+  # Downtime jail time
+  downtime_jail_time: "2 days"
+  # Felony jail time
+  felony_jail_time: "7 days"
+
+# Staking configuration
+staking:
+  # StakeHub protector address (need to be changed to actual address)
+  stake_hub_protector: "0x0000000000000000000000000000000000000000"
+  # Unbond period
+  unbond_period: "7 days"
+
+# Governance configuration
+governance:
+  # Voting delay period
+  init_voting_delay: "1 days / BLOCK_INTERVAL"
+  # Voting period
+  init_voting_period: "7 days / BLOCK_INTERVAL"
+  # Minimum period after quorum is reached
+  init_min_period_after_quorum: "uint64(1 days / BLOCK_INTERVAL)"
+  # Governor protector address (need to be changed to actual address)
+  governor_protector: "0x0000000000000000000000000000000000000000"
+  # Minimal delay time
+  init_minimal_delay: "24 hours"
+
+# Token recovery portal configuration
+token_recovery:
+  # Token recovery portal protector address (need to be changed to actual address)
+  protector: "0x0000000000000000000000000000000000000000"
+
+# Validators configuration
+validators:
+  # Validator set size
+  cluster_size: 13
+  # Whether to enable sentry nodes
+  enable_sentry_node: false
+  # Whether to enable full nodes
+  enable_full_node: false
+  
+# Node runtime configuration (these parameters will be read by node startup scripts)
+runtime:
+  # Breathe block interval (seconds) - converted from "1 day" to 86400 seconds
+  breathe_block_interval_seconds: 86400
+
