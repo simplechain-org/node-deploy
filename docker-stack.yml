@@ -1,0 +1,175 @@
+version: '3.8'
+
+services:
+  genesis:
+    image: genesis-builder:local
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: none
+    volumes:
+      - type: bind
+        source: ./genesis-out
+        target: /workspace/genesis-out
+    environment:
+      - PASSED_FORK_DELAY=60
+    networks:
+      - spc-network
+
+  spc-validator-1:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    hostname: ecs-7dff-0001
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+    user: root
+    entrypoint: ["/bin/bash"]
+    command:
+      - "-c"
+      - |
+        # Copy and execute swarm init script
+        cp /scripts/docker-swarm-init.sh /usr/local/bin/
+        chmod +x /usr/local/bin/docker-swarm-init.sh
+        exec /usr/local/bin/docker-swarm-init.sh
+    environment:
+      - NODE_TYPE=validator
+      - VALIDATOR_INDEX=0
+    configs:
+      - source: docker-swarm-init
+        target: /scripts/docker-swarm-init.sh
+      - source: docker-entrypoint
+        target: /entrypoint/docker-entrypoint.sh
+      - source: node-config
+        target: /home/sipc2/config/config.toml
+      - source: genesis-json
+        target: /home/sipc2/config/genesis.json
+      - source: validator0-keys-tar
+        target: /tmp/keys.tar.gz
+    secrets:
+      - source: password
+        target: /tmp/password.txt
+      - source: validator0-nodekey
+        target: /tmp/nodekey
+    volumes:
+      - validator1-data:/data
+    ports:
+      - target: 8545
+        published: 8645
+        protocol: tcp
+        mode: host
+      - target: 8546
+        published: 8646
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 31303
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 31303
+        protocol: udp
+        mode: host
+    networks:
+      - spc-network
+
+  spc-validator-2:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    hostname: ecs-7dff-0002
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+    user: root
+    entrypoint: ["/bin/bash"]
+    command:
+      - "-c"
+      - |
+        # Copy and execute swarm init script
+        cp /scripts/docker-swarm-init.sh /usr/local/bin/
+        chmod +x /usr/local/bin/docker-swarm-init.sh
+        exec /usr/local/bin/docker-swarm-init.sh
+    environment:
+      - NODE_TYPE=validator
+      - VALIDATOR_INDEX=1
+    configs:
+      - source: docker-swarm-init
+        target: /scripts/docker-swarm-init.sh
+      - source: docker-entrypoint
+        target: /entrypoint/docker-entrypoint.sh
+      - source: node-config
+        target: /home/sipc2/config/config.toml
+      - source: genesis-json
+        target: /home/sipc2/config/genesis.json
+      - source: validator1-keys-tar
+        target: /tmp/keys.tar.gz
+    secrets:
+      - source: password
+        target: /tmp/password.txt
+      - source: validator1-nodekey
+        target: /tmp/nodekey
+    volumes:
+      - validator2-data:/data
+    ports:
+      - target: 8545
+        published: 8745
+        protocol: tcp
+        mode: host
+      - target: 8546
+        published: 8746
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 32303
+        protocol: tcp
+        mode: host
+      - target: 30303
+        published: 32303
+        protocol: udp
+        mode: host
+    networks:
+      - spc-network
+
+networks:
+  spc-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  validator1-data:
+  validator2-data:
+
+configs:
+  docker-swarm-init:
+    file: ./docker-swarm-init.sh
+  docker-entrypoint:
+    file: ./docker-entrypoint.sh
+  node-config:
+    file: ./config.toml
+  genesis-json:
+    file: ./genesis-out/genesis.json
+  validator0-keys-tar:
+    file: ./keys/validator0-keys.tar.gz
+  validator1-keys-tar:
+    file: ./keys/validator1-keys.tar.gz
+
+secrets:
+  password:
+    file: ./keys/password.txt
+  validator0-nodekey:
+    file: ./keys/validator-nodekey0
+  validator1-nodekey:
+    file: ./keys/validator-nodekey1
+

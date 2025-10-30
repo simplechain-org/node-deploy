@@ -110,8 +110,10 @@ function prepare_config() {
             exit 1
         fi
 
+        if [ ${EnableInitHolderForValidator} = true ]; then
+            initHolders=${initHolders}","${operator_addr}
+        fi
 
-#         initHolders=${initHolders}","${operator_addr}
         fee_addr=${operator_addr}
 
         for f in ${workspace}/.local/consensus${i}/keystore/*; do
