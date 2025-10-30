@@ -1,12 +1,14 @@
-# BSC Node Docker Image
-FROM ubuntu:20.04
+# SPC Node Docker Image
+FROM ubuntu:24.04
 
 # Install dependencies
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     wget \
     jq \
     curl \
     ca-certificates \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user
@@ -24,16 +26,16 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create data directory
-RUN mkdir -p /home/sipc2/data
+RUN mkdir -p /home/sipc2/data /data
 
 # Set ownership
-RUN chown -R sipc2:sipc2 /home/sipc2
+RUN chown -R sipc2:sipc2 /home/sipc2 /data
 
-# Switch to sipc2 user
-USER sipc2
+# Don't switch user yet - entrypoint will handle permissions and switch user
+# USER sipc2
 
 # Expose ports
-EXPOSE 8545 8546 30303
+EXPOSE 8545 8546 30303 9000 6060
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -1,42 +1,76 @@
 version: '3.8'
 
 services:
-  bsc-validator-1:
-    build: .
-    container_name: bsc-validator-1
-    environment:
-      - NODE_TYPE=validator
-      - CONSENSUS_ADDRESS=0x${VALIDATOR_ADDRESS_1}
+  genesis:
+    build:
+      context: .
+      dockerfile: docker/genesis-builder/Dockerfile
+    container_name: genesis-builder
     volumes:
-      - ./deployment/validator1:/home/sipc2
-      - ./genesis/genesis.json:/home/sipc2/genesis.json
-      - ./config.toml:/home/sipc2/config.toml
-    ports:
-      - "8545:8545"
-      - "8546:8546"
-      - "30303:30303"
-      - "6060:6060"
+      - ./genesis-out:/workspace/genesis-out
+    environment:
+      - PASSED_FORK_DELAY=${PASSED_FORK_DELAY:-60}
     networks:
-      - bsc-network
-    restart: unless-stopped
+      - spc-network
 
-  bsc-validator-2:
-    build: .
-    container_name: bsc-validator-2
+  spc-validator-1:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    container_name: spc-validator-1
+    depends_on:
+      - genesis
+    user: root
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "cp /entrypoint/docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh && exec /usr/local/bin/docker-entrypoint.sh"]
     environment:
       - NODE_TYPE=validator
-      - CONSENSUS_ADDRESS=0x${VALIDATOR_ADDRESS_2}
+      - VALIDATOR_INDEX=0
     volumes:
-      - ./deployment/validator2:/home/sipc2
-      - ./genesis/genesis.json:/home/sipc2/genesis.json
-      - ./config.toml:/home/sipc2/config.toml
+      - ./docker-entrypoint.sh:/entrypoint/docker-entrypoint.sh:ro
+      - ./keys/password.txt:/home/sipc2/keys/password.txt:ro
+      - ./keys/validator-nodekey0:/home/sipc2/keys/nodekey:ro
+      - ./keys/consensus0/keystore:/home/sipc2/keys/consensus0/keystore:ro
+      - ./keys/bls0/bls:/home/sipc2/keys/bls0/bls:ro
+      - ./genesis-out/genesis.json:/home/sipc2/config/genesis.json:ro
+      - ./config.toml:/home/sipc2/config/config.toml:ro
+      - ./validator1-data:/data
     ports:
+      - "9100:9000"
       - "8645:8545"
       - "8646:8546"
       - "31303:30303"
       - "6160:6060"
     networks:
-      - bsc-network
+      - spc-network
+    restart: unless-stopped
+
+  spc-validator-2:
+    image: ghcr.io/simplechain-org/simplechain-v2:latest
+    container_name: spc-validator-2
+    depends_on:
+      - genesis
+    user: root
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "cp /entrypoint/docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh && exec /usr/local/bin/docker-entrypoint.sh"]
+    environment:
+      - NODE_TYPE=validator
+      - VALIDATOR_INDEX=1
+    volumes:
+      - ./docker-entrypoint.sh:/entrypoint/docker-entrypoint.sh:ro
+      - ./keys/password.txt:/home/sipc2/keys/password.txt:ro
+      - ./keys/validator-nodekey1:/home/sipc2/keys/nodekey:ro
+      - ./keys/consensus1/keystore:/home/sipc2/keys/consensus1/keystore:ro
+      - ./keys/bls1/bls:/home/sipc2/keys/bls1/bls:ro
+      - ./genesis-out/genesis.json:/home/sipc2/config/genesis.json:ro
+      - ./config.toml:/home/sipc2/config/config.toml:ro
+      - ./validator2-data:/data
+    ports:
+      - "9200:9000"
+      - "8745:8545"
+      - "8746:8546"
+      - "32303:30303"
+      - "6260:6060"
+    networks:
+      - spc-network
     restart: unless-stopped
 
   # bsc-fullnode:
@@ -58,5 +92,9 @@ services:
   #   restart: unless-stopped
 
 networks:
-  bsc-network:
+  spc-network:
     driver: bridge
+
+volumes:
+  validator1-data:
+  validator2-data:
